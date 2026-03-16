@@ -12,5 +12,5 @@ class Session:
     def send(self, data):
         self._socket.send(data)
 
-    def close_session(self):
+    def close(self):
         self._socket.close()
