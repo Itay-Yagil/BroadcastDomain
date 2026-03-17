@@ -10,7 +10,7 @@ class ServerProgram:
         self._waiting_for_session_initialize = []
     
     def _init_socket(self, bind_address):
-        print("Initializing socket")
+        print("Initializing socket...")
         sock = socket.socket()
         sock.bind(bind_address)
         sock.listen()
@@ -25,8 +25,18 @@ class ServerProgram:
                     self._create_new_session_socket(sock)
                 else:
                     self._initialize_session(sock)
-            
+
+            self._handle_room_interrupts()
             self._update_rooms()
+    
+    def _handle_room_interrupts(self):
+        rooms = list(self._rooms.values())
+        for room in rooms:
+            interrupts = room.get_interrupts_copy()
+            for interrupt in interrupts:
+                room.remove_session(interrupt[0])
+                new_room = self._get_room(interrupt[1])
+                new_room.add_session(interrupt[0])
 
     def _update_rooms(self):
         rooms_to_remove = []
@@ -37,7 +47,7 @@ class ServerProgram:
                 rooms_to_remove.append(room.get_name())
 
         for room in rooms_to_remove:
-            print(f"Deleting a room: {room}")
+            print(f"Deleting a room: {room}...")
             del self._rooms[room]
 
     def _create_new_session_socket(self, socket):
@@ -59,10 +69,11 @@ class ServerProgram:
         room.add_session(new_session)
         self._waiting_for_session_initialize.remove(sock)
         print("Session initialized...")
-    
+
     def _get_room(self, room_name):
         if room_name in self._rooms.keys():
             return self._rooms[room_name]
+        print(f"Creating a room: {room_name}...")
         self._rooms[room_name] = room.Room(room_name)
         return self._rooms[room_name]
 
