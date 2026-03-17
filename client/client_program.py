@@ -7,6 +7,8 @@ EXIT_COMMAND = "/exit"
 
 class ClientProgram:
     def __init__(self, bind_address, name):
+        if "\\" in name:
+            raise ValueError
         self._name = name
         self._socket = self._init_socket(bind_address)
         self._is_running = False
@@ -17,6 +19,8 @@ class ClientProgram:
         return sock
     
     def connect(self, server_address, room_name):
+        if "\\" in room_name:
+            raise ValueError
         self._socket.connect(server_address)
         hello_message = f"{self._name}\\{room_name}"
         self._socket.send(hello_message.encode())
@@ -41,6 +45,8 @@ class ClientProgram:
     
     def _print_incoming_messages(self):
         while self._is_running:
+            if self._socket.fileno() == -1:
+                break
             readable, _, _ = select.select([self._socket], [], [], 0)
             for sock in readable:
                 print(f"\n{sock.recv(1024).decode()}")

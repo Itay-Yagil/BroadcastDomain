@@ -7,28 +7,31 @@ class ServerProgram:
     def __init__(self, bind_address):
         self._rooms = {}
         self._socket = self._init_socket(bind_address)
+        self._admin_connection = []
         self._waiting_for_session_initialize = []
-    
+
     def _init_socket(self, bind_address):
         print("Initializing socket...")
         sock = socket.socket()
         sock.bind(bind_address)
         sock.listen()
         return sock
-    
+
     def run(self):
         print("Running...")
         while True:
-            readable, _, _ = select.select(self._waiting_for_session_initialize + [self._socket], [], [], 0)
+            readable, _, _ = select.select(self._waiting_for_session_initialize + self._admin_connection + [self._socket], [], [], 0)
             for sock in readable:
                 if sock is self._socket:
                     self._create_new_session_socket(sock)
-                else:
+                elif sock in self._waiting_for_session_initialize:
                     self._initialize_session(sock)
+                elif sock in self._admin_connection:
+                    self._handle_admin_message(sock)
 
             self._handle_room_interrupts()
-            self._update_rooms()
-    
+            self._update_room_list()
+
     def _handle_room_interrupts(self):
         rooms = list(self._rooms.values())
         for room in rooms:
@@ -38,7 +41,7 @@ class ServerProgram:
                 new_room = self._get_room(interrupt[1])
                 new_room.add_session(interrupt[0])
 
-    def _update_rooms(self):
+    def _update_room_list(self):
         rooms_to_remove = []
 
         for room in self._rooms.values():
@@ -58,17 +61,31 @@ class ServerProgram:
     def _initialize_session(self, sock):
         print("Initializing session...")
         hello_message = sock.recv(1024).decode()
-        parsed_hello_message = hello_message.split("\\")
-        name = parsed_hello_message[0]
-        room_name = parsed_hello_message[1]
+        hello_message_fields_dict = self._parse_hello_message(hello_message)
 
-        new_session = session.Session(name, sock)
-        room = self._get_room(room_name)
-
-        print("Adding session to room...")
-        room.add_session(new_session)
+        if hello_message_fields_dict["name"] == "admin":
+            self._handle_new_admin_connection(sock)
+        else:
+            self._handle_new_user_connection(sock, hello_message_fields_dict["name"], hello_message_fields_dict["room_name"])
+        
         self._waiting_for_session_initialize.remove(sock)
         print("Session initialized...")
+
+    def _parse_hello_message(self, hello_message):
+        parsed_hello_message = hello_message.split("\\")
+        hello_message_fields = { "name" : parsed_hello_message[0], 
+                                 "room_name" : parsed_hello_message[1]
+                               }
+
+        return hello_message_fields
+    
+    def _handle_new_admin_connection(self, sock):
+        self._admin_connection.append(sock)
+
+    def _handle_new_user_connection(self, sock, name, room_name):
+        new_session = session.Session(name, sock)
+        room = self._get_room(room_name)
+        room.add_session(new_session)
 
     def _get_room(self, room_name):
         if room_name in self._rooms.keys():
@@ -76,6 +93,14 @@ class ServerProgram:
         print(f"Creating a room: {room_name}...")
         self._rooms[room_name] = room.Room(room_name)
         return self._rooms[room_name]
+
+    def _handle_admin_message(self, sock):
+        message = sock.recv(1024).decode()
+        if message == "/exit":
+            self._admin_connection.remove(sock)
+        else:
+            for room in self._rooms.values():
+                room.broadcast("admin", message)
 
 
 def main():

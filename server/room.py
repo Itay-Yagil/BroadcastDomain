@@ -35,7 +35,7 @@ class Room:
         if received_message.startswith("/"):
             self._client_commands_handler(received_message, current_session)
         else:
-            message_to_send = self._create_message(current_session, received_message)
+            message_to_send = self._create_message(current_session.get_name(), received_message)
             self._broadcast_message(message_to_send, current_session)
 
     def _get_session_by_socket(self, sock):
@@ -48,7 +48,8 @@ class Room:
         if command == EXIT_COMMAND:
             session.close()
             self._sessions.remove(session)
-        elif command.split()[0] == TRASNFER_ROOM_COMMAND and len(command.split()) >= 2:
+        elif command.split()[0] == TRASNFER_ROOM_COMMAND and len(command.split()) >= 2 and \
+             command.split()[1] != self._name:
             self._interrupts.append((session, command.split()[1]))
 
     def _broadcast_message(self, message, sender_session):
@@ -57,8 +58,13 @@ class Room:
                 print(f"{self._name} - {message}")
                 session.send(message.encode())
     
-    def _create_message(self, session, message):
-        return f"{session.get_name()}: {message}"
+    def broadcast(self, admin, message):
+        message_to_send = self._create_message(admin, message)
+        for session in self._sessions:
+            session.send(message_to_send.encode())
+    
+    def _create_message(self, name, message):
+        return f"{name}: {message}"
 
     def get_name(self):
         return self._name
