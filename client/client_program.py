@@ -1,6 +1,7 @@
 import socket
 import select
 import sys
+import threading
 
 EXIT_COMMAND = "/exit"
 
@@ -8,6 +9,7 @@ class ClientProgram:
     def __init__(self, bind_address, name):
         self._name = name
         self._socket = self._init_socket(bind_address)
+        self._is_running = False
     
     def _init_socket(self, bind_address):
         sock = socket.socket()
@@ -20,16 +22,28 @@ class ClientProgram:
         self._socket.send(hello_message.encode())
     
     def run(self):
-        while True:
-            # STILL NEED TO ADD MULTI-THREDING FOR I/O
+        self._is_running = True
+        user_input_thread = threading.Thread(target=self._handle_user_input)
+        read_incoming_messages_thread = threading.Thread(target=self._print_incoming_messages)
+
+        user_input_thread.start()
+        read_incoming_messages_thread.start()
+        
+
+    def _handle_user_input(self):
+        while self._is_running:
             user_input = input(f"{self._name}: ")
             if user_input == EXIT_COMMAND:
                 self._exit_gracefully()
+                self._is_running = False
                 break
             self._socket.send(user_input.encode())
+    
+    def _print_incoming_messages(self):
+        while self._is_running:
             readable, _, _ = select.select([self._socket], [], [], 0)
             for sock in readable:
-                print(sock.recv(1024).decode())
+                print(f"\n{sock.recv(1024).decode()}")
     
     def _exit_gracefully(self):
         self._socket.send(EXIT_COMMAND.encode())
